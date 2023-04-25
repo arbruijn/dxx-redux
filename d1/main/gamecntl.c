@@ -1476,6 +1476,11 @@ int ReadControls(d_event *event)
 	{
 		kconfig_read_controls(event, 0);
 
+		if (GameArg.DbgFire) {
+			Controls.fire_primary_count += !Controls.fire_primary_state;
+			Controls.fire_primary_state = 1;
+		}
+
 		check_rear_view();
 
 		// If automap key pressed, enable automap unless you are in network mode, control center destroyed and < 10 seconds left

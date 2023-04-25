@@ -93,6 +93,7 @@ typedef struct Arg
 	int DbgSdlASyncBlit;
 #endif
 	int LogNetTraffic; 
+	int DbgFire;
 } __pack__ Arg;
 
 extern struct Arg GameArg;
