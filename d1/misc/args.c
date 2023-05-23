@@ -221,6 +221,7 @@ void ReadCmdArgs(void)
 #endif
 
 	GameArg.DbgFire = FindArg("-dbgfire");
+	GameArg.NoBriefing = FindArg("-nobriefing");
 
 	//GameArg.LogNetTraffic 		= ! FindArg("-nonetlog");
 	GameArg.LogNetTraffic 		= FindArg("-netlog");

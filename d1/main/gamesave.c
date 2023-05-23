@@ -57,6 +57,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "textures.h"
 #include "multi.h"
 #include "makesig.h"
+#include "args.h"
 
 #ifndef NDEBUG
 void dump_mine_info(void);
@@ -783,9 +784,11 @@ int load_game_data(PHYSFS_file *LoadFile)
 
 	if (game_top_fileinfo_version >= 19) {	//load pof names
 		N_save_pof_names = PHYSFSX_readShort(LoadFile);
-		if (N_save_pof_names != 0x614d && N_save_pof_names != 0x5547) { // "Ma"de w/DMB beta/"GU"ILE
-			Assert(N_save_pof_names < MAX_POLYGON_MODELS);
-			PHYSFS_read(LoadFile,Save_pof_names,N_save_pof_names,FILENAME_LEN);
+		if (N_save_pof_names != 0x614d && N_save_pof_names != 0x5547 && N_save_pof_names != 0x5053) { // "Ma"de w/DMB beta/"GU"ILE/"SP"IKE
+			if (N_save_pof_names >= 0 && N_save_pof_names < MAX_POLYGON_MODELS)
+				PHYSFS_read(LoadFile,Save_pof_names,N_save_pof_names,FILENAME_LEN);
+			else
+				con_printf(CON_NORMAL, "Invalid number of pof names %x\n", N_save_pof_names);
 		}
 	}
 
@@ -1236,11 +1239,15 @@ int load_level(const char * filename_passed)
 	#endif
 
 	#if !defined(NDEBUG) && !defined(COMPACT_SEGS)
-	if (check_segment_connections())
-		nm_messagebox( "ERROR", 1, "Ok", 
+	if (check_segment_connections()) {
+		if (GameArg.SysAutoDemo)
+			con_printf(CON_NORMAL, "Connectivity errors detected in mine.");
+		else
+			nm_messagebox( "ERROR", 1, "Ok", 
 				"Connectivity errors detected in\n"
 				"mine.  See monochrome screen for\n"
 				"details, and contact Matt or Mike." );
+	}
 	#endif
 
 	return 0;

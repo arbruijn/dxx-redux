@@ -645,7 +645,8 @@ void init_all_matcens(void)
 				if (RobotCenters[j].fuelcen_num == i)
 					break;
 			}
-			Assert(j != Num_robot_centers);
+			if (j != Num_robot_centers)
+				con_printf(CON_NORMAL, "No matcen information for matcen fuelcen %d\n", i);
 }
 #endif
 
@@ -657,7 +658,8 @@ void init_all_matcens(void)
 		int	fuelcen_num = RobotCenters[i].fuelcen_num;
 
 		Assert(fuelcen_num < Num_fuelcenters);
-		Assert(Station[fuelcen_num].Type == SEGMENT_IS_ROBOTMAKER);
+		if (Station[fuelcen_num].Type != SEGMENT_IS_ROBOTMAKER)
+			con_printf(CON_NORMAL, "Matcen %d points to fuelcen %d which isn't a matcen (but %d)\n", i, fuelcen_num, Station[fuelcen_num].Type);
 	}
 #endif
 

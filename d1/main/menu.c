@@ -407,6 +407,76 @@ void draw_copyright()
 	gr_string(0x8000,SHEIGHT-(LINE_SPACING*2),DESCENT_VERSION);
 }
 
+#if 1
+//values that describe where a mission is located
+enum mle_loc
+{
+	ML_CURDIR = 0,
+	ML_MISSIONDIR = 1
+};
+
+//mission list entry
+typedef struct mle {
+	char    *filename;          // filename without extension
+	int     builtin_hogsize;    // if it's the built-in mission, used for determining the version
+	char    mission_name[MISSION_NAME_LEN+1];
+	ubyte   anarchy_only_flag;  // if true, mission is anarchy only
+	char	*path;				// relative file path
+	enum mle_loc	location;           // where the mission is
+} mle;
+#endif
+
+// return 0 when finished
+int autoload_start()
+{
+	PHYSFS_file *f;
+	char last[PATH_MAX];
+	int mi;
+
+	extern int num_missions;
+	extern mle *build_mission_list(int anarchy_mode);
+	extern int load_mission(mle *mission);
+	extern void free_mission_list(mle *mission_list);
+
+	if ((f = PHYSFSX_openReadBuffered("lastmis.txt"))) {
+		PHYSFSX_fgets(last, sizeof(last), f);
+		PHYSFS_close(f);
+	} else
+		last[0] = 0;
+
+	mle *mission_list = build_mission_list(1);
+
+	mi = 0;
+	while (mi < num_missions && d_stricmp(mission_list[mi].filename, last))
+		mi++;
+
+	if (mi + 1 >= num_missions) {
+		free_mission_list(mission_list);
+		return 0;
+	}
+
+	do {
+		mi++;
+		strcpy(last, mission_list[mi].filename);
+	} while (mi + 1 < num_missions && !d_stricmp(last, mission_list[mi + 1].filename));
+
+	if (!(f = PHYSFS_openWrite("lastmis.txt")))
+		Error("Cannot create lastmis.txt");
+	PHYSFSX_puts(f, last);
+	PHYSFS_close(f);
+
+	con_printf(CON_NORMAL, "Loading mission %s (%d/%d)\n", last, mi, num_missions);
+
+	if (!load_mission(mission_list + mi))
+		Error("Failed to load mission %s", last);
+
+	free_mission_list(mission_list);
+
+	GameArg.NoBriefing = 1;
+	StartNewGame(1);
+	return 1;
+}
+
 int main_menu_handler(newmenu *menu, d_event *event, int *menu_choice )
 {
 	newmenu_item *items = newmenu_get_items(menu);
@@ -437,7 +507,11 @@ int main_menu_handler(newmenu *menu, d_event *event, int *menu_choice )
 			if ( /*keyd_time_when_last_pressed+i2f(45) < timer_query() || */ GameArg.SysAutoDemo  )
 			{
 				keyd_time_when_last_pressed = timer_query();			// Reset timer so that disk won't thrash if no demos.
-				newdemo_start_playback(NULL);		// Randomly pick a file
+				//newdemo_start_playback(NULL);		// Randomly pick a file
+				if (!autoload_start()) {
+					window_close(newmenu_get_window(menu));
+					return 0;
+				}
 			}
 			break;
 

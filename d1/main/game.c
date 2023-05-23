@@ -1149,6 +1149,12 @@ void GameProcessFrame(void)
 
 	flash_frame();
 
+	if (GameArg.SysAutoDemo && GameTime64 >= F0_1) {
+		if (Game_wind)
+			window_close(Game_wind);		// Go back to menu
+		return;
+	}
+
 	if ( Newdemo_state == ND_STATE_PLAYBACK ) {
 		newdemo_playback_one_frame();
 		if ( Newdemo_state != ND_STATE_PLAYBACK )		{

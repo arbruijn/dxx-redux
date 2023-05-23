@@ -54,7 +54,7 @@ typedef struct mle {
 	enum mle_loc	location;           // where the mission is
 } mle;
 
-static int num_missions = -1;
+int num_missions = -1;
 
 Mission *Current_mission = NULL; // currently loaded mission
 
