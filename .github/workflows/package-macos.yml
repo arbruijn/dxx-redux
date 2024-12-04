@@ -12,9 +12,9 @@ on:
 jobs:
   macos:
     name: macOS Apps
-    runs-on: macos-14
+    runs-on: macos-13
     env:
-      NO_MACOSX_DEPLOYMENT_TARGET: 10.14
+      MACOSX_DEPLOYMENT_TARGET: 10.14
     steps:
       - name: Clone repository
         uses: actions/checkout@v3

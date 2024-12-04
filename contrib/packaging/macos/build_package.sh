@@ -49,6 +49,9 @@ build_app() {
     cp -p $(find_lib $builddir/$name $sdl2) $contents/libs
     dylibbundler -ns -of -b -x $contents/libs/$sdl2 -d $contents/libs
 
+    codesign --force -s - -f $contents/MacOS/$name
+    find $contents/libs -name '*.dylib' -exec codesign --force -s - '{}' \;
+
     # zip up and output to top level dir
     zip -r -X ${zipfilename} ${prettyname}.app
 }
