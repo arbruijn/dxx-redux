@@ -1,0 +1,18 @@
+name: Package - All
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    uses: arbruijn/dxx-redux/.github/workflows/package-linux.yml@main
+  windows:
+    uses: arbruijn/dxx-redux/.github/workflows/package-windows.yml@main
+  windows32:
+    uses: arbruijn/dxx-redux/.github/workflows/package-windows32.yml@main
+  msvc:
+    uses: arbruijn/dxx-redux/.github/workflows/package-msvc.yml@main
+  macos:
+    uses: arbruijn/dxx-redux/.github/workflows/package-macos.yml@main
+  macos-arm:
+    uses: arbruijn/dxx-redux/.github/workflows/package-macos-arm.yml@main
