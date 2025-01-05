@@ -1,0 +1,27 @@
+name: Package - All
+
+on:
+  #push:
+  #  branches: [ master ]
+
+  #pull_request:
+  #  branches: [ master ]
+
+  workflow_dispatch:
+
+jobs:
+  all:
+    name: Build all
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Linux
+        uses: dxx-redux/dxx-redux/.github/workflows/package-linux.yml@main
+
+      - name: Windows32
+        uses: dxx-redux/dxx-redux/.github/workflows/package-windows32.yml@main
+
+      - name: Mac x86
+        uses: dxx-redux/dxx-redux/.github/workflows/package-macos.yml@main
+
+      - name: Mac arm
+        uses: dxx-redux/dxx-redux/.github/workflows/package-macos-arm.yml@main
