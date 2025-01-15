@@ -800,7 +800,7 @@ int HandleGameKey(int key)
 				if (Obs_at_distance && is_observing_player()) {
 					HUD_init_message_literal(HM_MULTI, "Observing first person.");
 					Obs_at_distance = 0;
-					init_cockpit();
+					select_cockpit(can_draw_observer_cockpit() ? PlayerCfg.PreferredCockpitMode : CM_FULL_SCREEN);
 				}
 			break;
 		case KEY_CTRLED + KEY_EQUAL:
@@ -808,7 +808,7 @@ int HandleGameKey(int key)
 				if (!Obs_at_distance && is_observing_player()) {
 					HUD_init_message_literal(HM_MULTI, "Observing third person.");
 					Obs_at_distance = 1;
-					init_cockpit();
+					select_cockpit(CM_FULL_SCREEN);
 				}
 			break;
 #endif
