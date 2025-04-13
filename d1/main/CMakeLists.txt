@@ -150,9 +150,10 @@ if(APPLE)
     target_link_libraries(d1x-redux PRIVATE arch_cocoa)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(NOT WIN32 AND NOT APPLE)
     target_link_libraries(d1x-redux PRIVATE arch_x11)
-    list(APPEND EXTRA_LIBRARIES "X11")
+    Find_package(X11)
+    list(APPEND EXTRA_LIBRARIES ${X11_LIBRARIES})
 endif()
 
 if(NOT WIN32)
