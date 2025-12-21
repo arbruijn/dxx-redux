@@ -151,7 +151,9 @@ grs_bitmap * texmerge_get_cached_bitmap( int tmap_bottom, int tmap_top )
 	if (bitmap_bottom->bm_w != bitmap_bottom->bm_h || bitmap_top->bm_w != bitmap_top->bm_h)
 		Error("Texture width != texture height!\n");
 	if (bitmap_bottom->bm_w != bitmap_top->bm_w || bitmap_bottom->bm_h != bitmap_top->bm_h)
-		Error("Top and Bottom textures have different size!\n");
+		Error("Top and Bottom textures have different size!\n(Top %d %dx%d Bottom %d %dx%d)\n",
+			tmap_top&0x3FFF, bitmap_top->bm_w, bitmap_top->bm_h,
+			tmap_bottom, bitmap_bottom->bm_w, bitmap_bottom->bm_h);
 
 	if (Cache[least_recently_used].bitmap != NULL)
 		gr_free_bitmap(Cache[least_recently_used].bitmap);
