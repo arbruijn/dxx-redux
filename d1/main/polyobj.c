@@ -39,6 +39,8 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "textures.h"
 #include "object.h"
 #include "lighting.h"
+#include "config.h"
+#include "gauges.h"
 #include "piggy.h"
 #endif
 #include "byteswap.h"
@@ -509,6 +511,24 @@ int alt_textures_to_ship_color(bitmap_index alt_textures[]) {
 	return 0;
 }
 
+#ifdef OGL
+static int get_player_outline_color(bitmap_index alt_textures[])
+{
+	const rgb *outline_rgb = player_rgb;
+	int color = alt_textures_to_ship_color(alt_textures);
+
+	if ((Game_mode & GM_MULTI) && Netgame.FairColors)
+		outline_rgb = player_rgb_all_blue;
+	else if (Netgame.BlackAndWhitePyros)
+		outline_rgb = player_rgb_alt;
+
+	if (color < 0 || color >= MAX_PLAYERS)
+		color = 0;
+
+	return BM_XRGB(outline_rgb[color].r, outline_rgb[color].g, outline_rgb[color].b);
+}
+#endif
+
 //draw a polygon model
 
 void draw_polygon_model(vms_vector *pos,vms_matrix *orient,vms_angvec *anim_angles,int model_num,int flags,g3s_lrgb light,fix *glow_values,bitmap_index alt_textures[])
@@ -601,6 +621,89 @@ void draw_polygon_model(vms_vector *pos,vms_matrix *orient,vms_angvec *anim_angl
 
 	g3_done_instance();
 
+}
+
+void draw_polygon_model_outline(vms_vector *pos,vms_matrix *orient,vms_angvec *anim_angles,int model_num,int flags,bitmap_index alt_textures[])
+{
+#ifdef OGL
+	polymodel *po;
+	const fix outline_scale = F1_0 + F1_0/12;
+	const int outline_alpha = 10;
+	int old_color, old_fade;
+	ubyte old_blend;
+
+	if (GameCfg.ClassicDepth && !(Game_mode & GM_MULTI))
+		return;
+
+	if (model_num < 0)
+		return;
+
+	old_color = grd_curcanv->cv_color;
+	old_fade = grd_curcanv->cv_fade_level;
+	old_blend = grd_curcanv->cv_blend_func;
+
+	gr_setcolor(get_player_outline_color(alt_textures));
+	gr_settransblend(outline_alpha, GR_BLEND_NORMAL);
+
+	glCullFace(GL_FRONT);
+	glDepthMask(GL_FALSE);
+
+	Assert(model_num < N_polygon_models);
+
+	po = &Polygon_models[model_num];
+
+	if (po->simpler_model)
+		if (flags == 0)
+		{
+			int cnt = 1;
+			fix depth;
+
+			depth = g3_calc_point_depth(pos);
+
+			while (po->simpler_model && depth > cnt++ * Simple_model_threshhold_scale * po->rad)
+				po = &Polygon_models[po->simpler_model-1];
+		}
+
+	g3_start_instance_matrix(pos,orient);
+
+	g3_set_interp_points(robot_points);
+
+	if (flags == 0)
+		g3_draw_polygon_model_outline(po->model_data,anim_angles,outline_scale);
+	else {
+		int i;
+
+		for (i=0;flags;flags>>=1,i++)
+			if (flags & 1) {
+				vms_vector ofs;
+
+				Assert(i < po->n_models);
+
+				vm_vec_avg(&ofs,&po->submodel_mins[i],&po->submodel_maxs[i]);
+				vm_vec_negate(&ofs);
+				g3_start_instance_matrix(&ofs,NULL);
+
+				g3_draw_polygon_model_outline(&po->model_data[po->submodel_ptrs[i]],anim_angles,outline_scale);
+
+				g3_done_instance();
+			}
+	}
+
+	g3_done_instance();
+
+	glDepthMask(GL_TRUE);
+	glCullFace(GL_BACK);
+
+	gr_settransblend(old_fade, old_blend);
+	gr_setcolor(old_color);
+#else
+	(void)pos;
+	(void)orient;
+	(void)anim_angles;
+	(void)model_num;
+	(void)flags;
+	(void)alt_textures;
+#endif
 }
 
 void free_polygon_models()

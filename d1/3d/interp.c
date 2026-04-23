@@ -69,6 +69,20 @@ void rotate_point_list(g3s_point *dest,vms_vector *src,int n)
 		g3_rotate_point(dest++,src++);
 }
 
+static void rotate_scaled_point_list(g3s_point *dest,vms_vector *src,int n,fix scale)
+{
+	if (scale == F1_0) {
+		rotate_point_list(dest,src,n);
+		return;
+	}
+
+	while (n--) {
+		vms_vector scaled;
+		vm_vec_copy_scale(&scaled,src++,scale);
+		g3_rotate_point(dest++,&scaled);
+	}
+}
+
 vms_angvec zero_angles = {0,0,0};
 
 g3s_point *point_list[MAX_POINTS_PER_POLY];
@@ -284,6 +298,118 @@ bool g3_draw_polygon_model(void *model_ptr,grs_bitmap **model_bitmaps,vms_angvec
 
 				if (glow_values)
 					glow_num = w(p+2);
+				p += 4;
+				break;
+
+			default:
+			;
+	}
+	return 1;
+}
+
+bool g3_draw_polygon_model_outline(void *model_ptr,vms_angvec *anim_angles,fix scale)
+{
+	ubyte *p = model_ptr;
+
+	while (w(p) != OP_EOF)
+
+		switch (w(p)) {
+
+			case OP_DEFPOINTS: {
+				int n = w(p+2);
+
+				rotate_scaled_point_list(Interp_point_list,vp(p+4),n,scale);
+				p += n*sizeof(struct vms_vector) + 4;
+
+				break;
+			}
+
+			case OP_DEFP_START: {
+				int n = w(p+2);
+				int s = w(p+4);
+
+				rotate_scaled_point_list(&Interp_point_list[s],vp(p+8),n,scale);
+				p += n*sizeof(struct vms_vector) + 8;
+
+				break;
+			}
+
+			case OP_FLATPOLY: {
+				int nv = w(p+2);
+
+				Assert( nv < MAX_POINTS_PER_POLY );
+				if (g3_check_normal_facing(vp(p+4),vp(p+16)) <= 0) {
+					int i;
+
+					for (i=0;i<nv;i++)
+						point_list[i] = Interp_point_list + wp(p+30)[i];
+
+					g3_draw_poly(nv,point_list);
+				}
+
+				p += 30 + ((nv&~1)+1)*2;
+
+				break;
+			}
+
+			case OP_TMAPPOLY: {
+				int nv = w(p+2);
+
+				Assert( nv < MAX_POINTS_PER_POLY );
+				if (g3_check_normal_facing(vp(p+4),vp(p+16)) <= 0) {
+					int i;
+
+					for (i=0;i<nv;i++)
+						point_list[i] = Interp_point_list + wp(p+30)[i];
+
+					g3_draw_poly(nv,point_list);
+				}
+
+				p += 30 + ((nv&~1)+1)*2 + nv*12;
+
+				break;
+			}
+
+			case OP_SORTNORM:
+
+				if (g3_check_normal_facing(vp(p+16),vp(p+4)) > 0) {
+					g3_draw_polygon_model_outline(p+w(p+30),anim_angles,scale);
+					g3_draw_polygon_model_outline(p+w(p+28),anim_angles,scale);
+				}
+				else {
+					g3_draw_polygon_model_outline(p+w(p+28),anim_angles,scale);
+					g3_draw_polygon_model_outline(p+w(p+30),anim_angles,scale);
+				}
+
+				p += 32;
+
+				break;
+
+			case OP_RODBM:
+				p+=36;
+				break;
+
+			case OP_SUBCALL: {
+				vms_angvec *a;
+
+				if (anim_angles)
+					a = &anim_angles[w(p+2)];
+				else
+					a = &zero_angles;
+
+				g3_start_instance_angles(vp(p+4),a);
+
+				g3_draw_polygon_model_outline(p+w(p+16),anim_angles,scale);
+
+				g3_done_instance();
+
+				p += 20;
+
+				break;
+
+			}
+
+			case OP_GLOW:
 				p += 4;
 				break;
 
@@ -755,4 +881,3 @@ int get_chunks(ubyte *data, ubyte *new_data, chunk *list, int *no)
 	return p + 2 - data;
 }
 #endif //def WORDS_NEED_ALIGNMENT
-

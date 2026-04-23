@@ -478,6 +478,15 @@ void draw_polygon_object(object *obj)
 					   light,
 					   engine_glow_value,
 					   alt_textures);
+#ifdef OGL
+			if (obj->type == OBJ_PLAYER)
+				draw_polygon_model_outline(&obj->pos,
+							   &obj->orient,
+							   obj->rtype.pobj_info.anim_angles,
+							   obj->rtype.pobj_info.model_num,
+							   obj->rtype.pobj_info.subobj_flags,
+							   alt_textures);
+#endif
 			if (observed && PlayerCfg.ObsTransparentThirdPerson[get_observer_game_mode()])
 				gr_settransblend(GR_FADE_OFF, GR_BLEND_NORMAL);
 
