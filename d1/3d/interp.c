@@ -69,20 +69,6 @@ void rotate_point_list(g3s_point *dest,vms_vector *src,int n)
 		g3_rotate_point(dest++,src++);
 }
 
-static void rotate_scaled_point_list(g3s_point *dest,vms_vector *src,int n,fix scale)
-{
-	if (scale == F1_0) {
-		rotate_point_list(dest,src,n);
-		return;
-	}
-
-	while (n--) {
-		vms_vector scaled;
-		vm_vec_copy_scale(&scaled,src++,scale);
-		g3_rotate_point(dest++,&scaled);
-	}
-}
-
 vms_angvec zero_angles = {0,0,0};
 
 g3s_point *point_list[MAX_POINTS_PER_POLY];
@@ -310,6 +296,8 @@ bool g3_draw_polygon_model(void *model_ptr,grs_bitmap **model_bitmaps,vms_angvec
 bool g3_draw_polygon_model_outline(void *model_ptr,vms_angvec *anim_angles,fix scale)
 {
 	ubyte *p = model_ptr;
+	/* The caller still passes a scale-like value; use the excess as shell thickness. */
+	const fix outline_offset = scale - F1_0;
 
 	while (w(p) != OP_EOF)
 
@@ -318,7 +306,7 @@ bool g3_draw_polygon_model_outline(void *model_ptr,vms_angvec *anim_angles,fix s
 			case OP_DEFPOINTS: {
 				int n = w(p+2);
 
-				rotate_scaled_point_list(Interp_point_list,vp(p+4),n,scale);
+				rotate_point_list(Interp_point_list,vp(p+4),n);
 				p += n*sizeof(struct vms_vector) + 4;
 
 				break;
@@ -328,7 +316,7 @@ bool g3_draw_polygon_model_outline(void *model_ptr,vms_angvec *anim_angles,fix s
 				int n = w(p+2);
 				int s = w(p+4);
 
-				rotate_scaled_point_list(&Interp_point_list[s],vp(p+8),n,scale);
+				rotate_point_list(&Interp_point_list[s],vp(p+8),n);
 				p += n*sizeof(struct vms_vector) + 8;
 
 				break;
@@ -340,9 +328,19 @@ bool g3_draw_polygon_model_outline(void *model_ptr,vms_angvec *anim_angles,fix s
 				Assert( nv < MAX_POINTS_PER_POLY );
 				if (g3_check_normal_facing(vp(p+4),vp(p+16)) <= 0) {
 					int i;
+					g3s_point face_points[MAX_POINTS_PER_POLY];
+					vms_vector face_offset;
 
-					for (i=0;i<nv;i++)
-						point_list[i] = Interp_point_list + wp(p+30)[i];
+					vm_vec_rotate(&face_offset,vp(p+16),&View_matrix);
+					vm_vec_copy_scale(&face_offset,&face_offset,outline_offset);
+
+					for (i=0;i<nv;i++) {
+						face_points[i] = Interp_point_list[wp(p+30)[i]];
+						vm_vec_add2(&face_points[i].p3_vec,&face_offset);
+						face_points[i].p3_flags = 0;
+						g3_code_point(&face_points[i]);
+						point_list[i] = &face_points[i];
+					}
 
 					g3_draw_poly(nv,point_list);
 				}
@@ -358,9 +356,19 @@ bool g3_draw_polygon_model_outline(void *model_ptr,vms_angvec *anim_angles,fix s
 				Assert( nv < MAX_POINTS_PER_POLY );
 				if (g3_check_normal_facing(vp(p+4),vp(p+16)) <= 0) {
 					int i;
+					g3s_point face_points[MAX_POINTS_PER_POLY];
+					vms_vector face_offset;
 
-					for (i=0;i<nv;i++)
-						point_list[i] = Interp_point_list + wp(p+30)[i];
+					vm_vec_rotate(&face_offset,vp(p+16),&View_matrix);
+					vm_vec_copy_scale(&face_offset,&face_offset,outline_offset);
+
+					for (i=0;i<nv;i++) {
+						face_points[i] = Interp_point_list[wp(p+30)[i]];
+						vm_vec_add2(&face_points[i].p3_vec,&face_offset);
+						face_points[i].p3_flags = 0;
+						g3_code_point(&face_points[i]);
+						point_list[i] = &face_points[i];
+					}
 
 					g3_draw_poly(nv,point_list);
 				}
