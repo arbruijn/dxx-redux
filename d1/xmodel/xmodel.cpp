@@ -27,18 +27,98 @@ struct vert {
 	tTexCoord2f tex;
 };
 
+struct outline_vert {
+	CFloatVector3 pos;
+};
+
 struct render_model {
 	ASE::CModel m;
 	int *bmvertofs;
 	int *bmvertcount;
 	struct vert *verts;
 	int vertcount;
+	struct outline_vert *outline_verts;
+	int outline_vertcount;
 	GLuint *bmtex;
 	GLuint vbo;
+	GLuint outline_vbo;
 	int glloaded;
 };
 
 void *xmodels[NUM_XMODELS];
+
+static CFloatVector3 xmodel_get_face_normal(ASE::CSubModel& sm, ASE::CFace& f)
+{
+	if (!f.m_vNormal.IsZero())
+		return f.m_vNormal;
+	return CFloatVector3::Normal(
+		sm.m_vertices[f.m_nVerts[0]].m_vertex,
+		sm.m_vertices[f.m_nVerts[1]].m_vertex,
+		sm.m_vertices[f.m_nVerts[2]].m_vertex);
+}
+
+static void xmodel_build_outline_points(CFloatVector3 *outline_points, ASE::CSubModel& sm, float outline_offset)
+{
+	int i;
+	CFloatVector3 *point_normals;
+
+	if (!sm.m_nVerts)
+		return;
+
+	point_normals = new CFloatVector3[sm.m_nVerts];
+	for (i = 0; i < sm.m_nVerts; i++)
+		point_normals[i].SetZero();
+
+	for (i = 0; i < sm.m_nFaces; i++) {
+		ASE::CFace& f = sm.m_faces[i];
+		CFloatVector3 face_normal = xmodel_get_face_normal(sm, f);
+
+		for (int j = 0; j < 3; j++)
+			point_normals[f.m_nVerts[j]] += face_normal;
+	}
+
+	for (i = 0; i < sm.m_nVerts; i++) {
+		outline_points[i] = sm.m_vertices[i].m_vertex;
+		if (!point_normals[i].IsZero()) {
+			CFloatVector3 avg_normal = point_normals[i];
+
+			CFloatVector3::Normalize(avg_normal);
+			outline_points[i] += avg_normal * outline_offset;
+		}
+	}
+
+	delete[] point_normals;
+}
+
+static void xmodel_build_transform_matrix(vms_vector *pos, vms_matrix *orient, float fm[16])
+{
+	vms_vector v, v2, vpos;
+	vms_matrix vmat, m;
+	fix *xp;
+
+	vm_vec_sub(&v, &View_position, pos);
+	vm_vec_rotate(&v2, &v, orient);
+	vm_copy_transpose_matrix(&m, orient);
+	vm_matrix_x_matrix(&vmat, &m, &View_matrix);
+	vm_vec_rotate(&vpos, &v2, &vmat);
+
+	vpos.z *= -1;
+
+	xp = &vmat.rvec.x;
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++)
+			fm[i * 4 + j] = f2fl(xp[j * 3 + i]);
+		fm[i * 4 + 3] = 0;
+	}
+	xp = &vpos.x;
+	for (int j = 0; j < 3; j++)
+		fm[3 * 4 + j] = -f2fl(xp[j]);
+	fm[15] = 1;
+
+	// forward vec -> backward vec
+	for (int j = 0; j < 3; j++)
+		fm[2 + j * 4] *= -1;
+}
 
 // return -1 on error
 int xmodel_load_gl(void *model) {
@@ -77,6 +157,12 @@ int xmodel_load_gl(void *model) {
 	glBufferData(GL_ARRAY_BUFFER, rm.vertcount * sizeof(rm.verts[0]), rm.verts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+	glGenBuffers(1, &rm.outline_vbo);
+
+	glBindBuffer(GL_ARRAY_BUFFER, rm.outline_vbo);
+	glBufferData(GL_ARRAY_BUFFER, rm.outline_vertcount * sizeof(rm.outline_verts[0]), rm.outline_verts, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 	rm.glloaded = 1;
 	return 0;
 }
@@ -89,6 +175,8 @@ void xmodel_free_gl(void *model) {
 	memset(rm.bmtex, 0, rm.m.m_textures.m_nBitmaps * sizeof(rm.bmtex[0]));
 	glDeleteBuffers(1, &rm.vbo);
 	rm.vbo = 0;
+	glDeleteBuffers(1, &rm.outline_vbo);
+	rm.outline_vbo = 0;
 	rm.glloaded = 0;
 }
 
@@ -97,6 +185,7 @@ void xmodel_free(void *model) {
 	render_model& rm = *rmp;
 	xmodel_free_gl(model);
 	delete[] rm.verts;
+	delete[] rm.outline_verts;
 	delete[] rm.bmvertcount;
 	delete[] rm.bmvertofs;
 	delete[] rm.bmtex;
@@ -130,6 +219,7 @@ void *xmodel_load(const char *filename) {
 	int *bmvertcount = rm.bmvertcount = new int[num_bitmaps]();
 	int i, v;
 	ASE::CSubModel *sm;
+	const float outline_offset = f2fl(outline_scale - F1_0);
 	for (sm = m.m_subModels, i = 0; sm; sm = sm->m_next, i++) {
 		if (ExcludeSubModel(sm, 0, -1, 0, 0))
 			continue;
@@ -149,26 +239,37 @@ void *xmodel_load(const char *filename) {
 	memcpy(bmvertpos, rm.bmvertofs, num_bitmaps * sizeof(int));
 
 	vert *verts = rm.verts = new vert[vertcount];
+	outline_vert *outline_verts = rm.outline_verts = new outline_vert[vertcount];
+	rm.outline_vertcount = vertcount;
 	for (sm = m.m_subModels; sm; sm = sm->m_next) {
 		if (ExcludeSubModel(sm, 0, -1, 0, 0))
 			continue;
 		int hastex = sm->m_nTexCoord;
 		CFloatVector3 ofs = sm->m_vOffset;
+		CFloatVector3 *outline_points = NULL;
+
+		if (sm->m_nVerts) {
+			outline_points = new CFloatVector3[sm->m_nVerts];
+			xmodel_build_outline_points(outline_points, *sm, outline_offset);
+		}
 		for (int fi = 0; fi < sm->m_nFaces; fi++) {
 			ASE::CFace& f = sm->m_faces[fi];
 			int bm = sm->m_nBitmap, v = bmvertpos[bm];
 			for (int j = 0; j < 3; j++) {
 				verts[v + j].pos = sm->m_vertices[f.m_nVerts[j]].m_vertex + ofs;
+				outline_verts[v + j].pos = outline_points[f.m_nVerts[j]] + ofs;
 				if (hastex)
 					verts[v + j].tex = sm->m_texCoord[f.m_nTexCoord[j]];
 			}
 			bmvertpos[bm] += 3;
 		}
+		delete[] outline_points;
 	}
 	delete[] bmvertpos;
 
 	rm.bmtex = new GLuint[num_bitmaps]();
 	rm.vbo = 0;
+	rm.outline_vbo = 0;
 
 	return rmp;
 }
@@ -215,6 +316,26 @@ void xmodel_show(void *model, int mpcolor, g3s_lrgb *light) {
 		glDisable(GL_DEPTH_TEST);
 }
 
+void xmodel_show_outline(void *model) {
+	render_model& rm = *(render_model *)model;
+	int c = grd_curcanv->cv_color;
+	float color_alpha;
+
+	if (!rm.outline_vertcount)
+		return;
+
+	OGL_DISABLE(TEXTURE_2D);
+	color_alpha = (grd_curcanv->cv_fade_level >= GR_FADE_OFF)?1.0f:(1.0f - (float)grd_curcanv->cv_fade_level / ((float)GR_FADE_LEVELS - 1.0f));
+	glColor4f(PAL2Tr(c), PAL2Tg(c), PAL2Tb(c), color_alpha);
+
+	glBindBuffer(GL_ARRAY_BUFFER, rm.outline_vbo);
+	glVertexPointer(3, GL_FLOAT, sizeof(outline_vert), (void *)0);
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glDrawArrays(GL_TRIANGLES, 0, rm.outline_vertcount);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
 #if 0
 #define GLAPIENTRY
 #define GL_DEBUG_TYPE_ERROR               0x824C
@@ -239,36 +360,25 @@ void xmodel_show_at(void *model, vms_vector *pos, vms_matrix *orient, int mpcolo
 	if (!((render_model *)model)->glloaded)
 		xmodel_load_gl(model);
 
-	vms_vector v,v2,vpos;
-	vms_matrix vmat,m;
-	vm_vec_sub(&v,&View_position,pos);
-	vm_vec_rotate(&v2,&v,orient);
-	vm_copy_transpose_matrix(&m,orient);
-	vm_matrix_x_matrix(&vmat,&m,&View_matrix);
-	vm_vec_rotate(&vpos,&v2,&vmat);
-
-	vpos.z *= -1;
-
-	// create 4x4 lookat matrix
 	float fm[16];
-	fix *xp = &vmat.rvec.x;
-	for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++)
-			fm[i * 4 + j] = f2fl(xp[j * 3 + i]);
-		fm[i * 4 + 3] = 0;
-	}
-	xp = &vpos.x;
-	for (int j = 0; j < 3; j++)
-		fm[3 * 4 + j] = -f2fl(xp[j]);
-	fm[15] = 1;
-
-	// forward vec -> backward vec
-	for (int j = 0; j < 3; j++)
-		fm[2 + j * 4] *= -1;
+	xmodel_build_transform_matrix(pos, orient, fm);
 
 	glPushMatrix();
 	glLoadMatrixf(fm);
 	xmodel_show(model, mpcolor, light);
+	glPopMatrix();
+}
+
+void xmodel_show_outline_at(void *model, vms_vector *pos, vms_matrix *orient) {
+	if (!((render_model *)model)->glloaded)
+		xmodel_load_gl(model);
+
+	float fm[16];
+	xmodel_build_transform_matrix(pos, orient, fm);
+
+	glPushMatrix();
+	glLoadMatrixf(fm);
+	xmodel_show_outline(model);
 	glPopMatrix();
 }
 
@@ -323,4 +433,12 @@ int xmodel_show_if_loaded(enum xmodel_type mt, int modelnum, vms_vector *pos, vm
 int xmodel_exists(enum xmodel_type mt, int modelnum) {
 	int xmodelnum = xmodel_xlate(mt, modelnum);
 	return xmodelnum != -1 && xmodels[xmodelnum];
+}
+
+int xmodel_show_outline_if_loaded(enum xmodel_type mt, int modelnum, vms_vector *pos, vms_matrix *orient) {
+	int xmodelnum = xmodel_xlate(mt, modelnum);
+	if (xmodelnum == -1 || !xmodels[xmodelnum])
+		return 0;
+	xmodel_show_outline_at(xmodels[xmodelnum], pos, orient);
+	return 1;
 }

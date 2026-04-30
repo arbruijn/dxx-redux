@@ -69,6 +69,7 @@ extern int N_polygon_models;
 
 // array of names of currently-loaded models
 extern char Pof_names[MAX_POLYGON_MODELS][13];
+extern fix outline_scale;
 
 void free_polygon_models();
 void init_polygon_models();

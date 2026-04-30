@@ -57,6 +57,7 @@ int N_polygon_models = 0;
 
 #define MAX_POLYGON_VECS 1000
 g3s_point robot_points[MAX_POLYGON_VECS];
+fix outline_scale = F1_0 + F1_0/12;
 
 #define PM_COMPATIBLE_VERSION 6
 #define PM_OBJFILE_VERSION 8
@@ -627,10 +628,10 @@ void draw_polygon_model_outline(vms_vector *pos,vms_matrix *orient,vms_angvec *a
 {
 #ifdef OGL
 	polymodel *po;
-	const fix outline_scale = F1_0 + F1_0/12;
 	const int outline_alpha = 10;
 	int old_color, old_fade;
 	ubyte old_blend;
+	int drawn = 0;
 
 	if (GameCfg.ClassicDepth && !(Game_mode & GM_MULTI))
 		return;
@@ -648,48 +649,53 @@ void draw_polygon_model_outline(vms_vector *pos,vms_matrix *orient,vms_angvec *a
 	glCullFace(GL_FRONT);
 	glDepthMask(GL_FALSE);
 
-	Assert(model_num < N_polygon_models);
+	if (!flags)
+		drawn = xmodel_show_outline_if_loaded(XM_POLYOBJ, model_num, pos, orient);
 
-	po = &Polygon_models[model_num];
+	if (!drawn) {
+		Assert(model_num < N_polygon_models);
 
-	if (po->simpler_model)
+		po = &Polygon_models[model_num];
+
+		if (po->simpler_model)
+			if (flags == 0)
+			{
+				int cnt = 1;
+				fix depth;
+
+				depth = g3_calc_point_depth(pos);
+
+				while (po->simpler_model && depth > cnt++ * Simple_model_threshhold_scale * po->rad)
+					po = &Polygon_models[po->simpler_model-1];
+			}
+
+		g3_start_instance_matrix(pos,orient);
+
+		g3_set_interp_points(robot_points);
+
 		if (flags == 0)
-		{
-			int cnt = 1;
-			fix depth;
+			g3_draw_polygon_model_outline(po->model_data,anim_angles,outline_scale);
+		else {
+			int i;
 
-			depth = g3_calc_point_depth(pos);
+			for (i=0;flags;flags>>=1,i++)
+				if (flags & 1) {
+					vms_vector ofs;
 
-			while (po->simpler_model && depth > cnt++ * Simple_model_threshhold_scale * po->rad)
-				po = &Polygon_models[po->simpler_model-1];
+					Assert(i < po->n_models);
+
+					vm_vec_avg(&ofs,&po->submodel_mins[i],&po->submodel_maxs[i]);
+					vm_vec_negate(&ofs);
+					g3_start_instance_matrix(&ofs,NULL);
+
+					g3_draw_polygon_model_outline(&po->model_data[po->submodel_ptrs[i]],anim_angles,outline_scale);
+
+					g3_done_instance();
+				}
 		}
 
-	g3_start_instance_matrix(pos,orient);
-
-	g3_set_interp_points(robot_points);
-
-	if (flags == 0)
-		g3_draw_polygon_model_outline(po->model_data,anim_angles,outline_scale);
-	else {
-		int i;
-
-		for (i=0;flags;flags>>=1,i++)
-			if (flags & 1) {
-				vms_vector ofs;
-
-				Assert(i < po->n_models);
-
-				vm_vec_avg(&ofs,&po->submodel_mins[i],&po->submodel_maxs[i]);
-				vm_vec_negate(&ofs);
-				g3_start_instance_matrix(&ofs,NULL);
-
-				g3_draw_polygon_model_outline(&po->model_data[po->submodel_ptrs[i]],anim_angles,outline_scale);
-
-				g3_done_instance();
-			}
+		g3_done_instance();
 	}
-
-	g3_done_instance();
 
 	glDepthMask(GL_TRUE);
 	glCullFace(GL_BACK);
