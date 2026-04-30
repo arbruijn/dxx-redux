@@ -384,18 +384,17 @@ return CModel::Error ("unexpected end of file");
 
 int32_t CSubModel::ReadMeshNormals (CFile& cf)
 {
-	#if 0
 	CFace*	pf;
+	#if 0
 	CVertex*	pv;
-	int32_t		i;
 	#endif
+	int32_t		i;
 
 if (CharTok (" \t") != '{')
 	return CModel::Error ("syntax error");
 while ((pszToken = ReadLine (cf))) {
 	if (*pszToken == '}')
 		return 1;
-	#if 0
 	if (!strcmp (pszToken, "*MESH_FACENORMAL")) {
 		if (!m_faces)
 			return CModel::Error ("no faces found");
@@ -405,6 +404,7 @@ while ((pszToken = ReadLine (cf))) {
 		pf = m_faces + i;
 		ReadVector (cf, &pf->m_vNormal);
 		}
+	#if 0
 	else if (!strcmp (pszToken, "*MESH_VERTEXNORMAL")) {
 		if (!m_vertices)
 			return CModel::Error ("no vertices found");
