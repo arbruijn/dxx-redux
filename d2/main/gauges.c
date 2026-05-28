@@ -1530,14 +1530,13 @@ void sb_show_lives()
 	}
 }
 
-#ifndef RELEASE
-
-extern int Piggy_bitmap_cache_next;
-
 void show_time()
 {
-	int secs = f2i(Players[Player_num].time_level) % 60;
-	int mins = f2i(Players[Player_num].time_level) / 60;
+	fix64 t = Players[Player_num].time_total;
+	int secs = f2i(t) % 60;
+	int mins = (f2i(t) / 60) % 60;
+	int hours = f2i(t) / 3600;
+	int tsecs = f2i(t * 10) % 10;
 
 	gr_set_curfont( GAME_FONT );
 
@@ -1545,9 +1544,12 @@ void show_time()
 		Color_0_31_0 = BM_XRGB(0,31,0);
 	gr_set_fontcolor(Color_0_31_0, -1 );
 
-	gr_printf(SWIDTH-FSPACX(30),GHEIGHT-(LINE_SPACING*11),"%d:%02d", mins, secs);
+	int x = SWIDTH-FSPACX(30), y = GHEIGHT-(LINE_SPACING*11);
+	if (hours)
+		gr_printf(x, y,"%d:%02d:%02d.%d", hours, mins, secs, tsecs);
+	else
+		gr_printf(x, y,"%d:%02d.%d", mins, secs, tsecs);
 }
-#endif
 
 #define EXTRA_SHIP_SCORE	50000		//get new ship every this many points
 
@@ -4671,10 +4673,8 @@ void draw_hud()
 		if ((Game_mode & (GM_NETWORK | GM_MULTI_COOP | GM_OBSERVER)) != GM_NETWORK || Newdemo_state == ND_STATE_PLAYBACK)
 			hud_show_vel();
 
-#ifndef RELEASE
-		if (!(Game_mode&GM_MULTI && Show_kill_list))
+		if (!(Game_mode&GM_MULTI))
 			show_time();
-#endif
 
 		if (PlayerCfg.CurrentCockpitMode != CM_LETTERBOX && PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW)
 		{
