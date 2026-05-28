@@ -479,7 +479,7 @@ void draw_polygon_object(object *obj)
 					   engine_glow_value,
 					   alt_textures);
 #ifdef OGL
-			if (obj->type == OBJ_PLAYER)
+			if (obj->type == OBJ_PLAYER && 0)
 				draw_polygon_model_outline(&obj->pos,
 							   &obj->orient,
 							   obj->rtype.pobj_info.anim_angles,
